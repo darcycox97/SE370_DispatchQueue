@@ -21,38 +21,41 @@
         CONCURRENT, SERIAL
     } queue_type_t;
 
-    typedef struct task {
+    typedef struct task task_t;
+
+    struct task {
         char name[64];              // to identify it when debugging
         void (*work)(void *);       // the function to perform
         void *params;               // parameters to pass to the function
         task_dispatch_type_t type;  // asynchronous or synchronous
         task_t *next;	   	    // points to the next task in the queue
         sem_t *task_semaphore;      // so we know when this task is finished
-    } task_t;
-    
+    };
+
     typedef struct dispatch_queue_t dispatch_queue_t; // the dispatch queue type
     typedef struct dispatch_queue_thread_t dispatch_queue_thread_t; // the dispatch queue thread type
 
     struct dispatch_queue_thread_t {
         dispatch_queue_t *queue;// the queue this thread is associated with
-        pthread_t thread;       // the thread which runs the task
-        sem_t thread_semaphore; // the semaphore the thread waits on until a task is allocated
+        pthread_t *thread;       // the thread which runs the task
+        sem_t *thread_semaphore; // the semaphore the thread waits on until a task is allocated
         task_t *task;           // the current task for this thread
         dispatch_queue_thread_t *next; // pointer to next available thread in pool
-    };
-
-    struct dispatch_queue_t {
-        queue_type_t queue_type;            // the type of queue - serial or concurrent
-        task_t *head;
-        task_t *tail;
-	thread_pool_t *threads;  // the threads associated with this queue
-        sem_t *tasks_semaphore; // keeps track of the number of tasks ready to be executed
     };
 
     typedef struct thread_pool {
         sem_t *thread_pool_semaphore; // waits on this for threads to become available
         dispatch_queue_thread_t *head; // points to the next available thread
     } thread_pool_t;
+
+    struct dispatch_queue_t {
+        queue_type_t queue_type;            // the type of queue - serial or concurrent
+        task_t *head;
+        task_t *tail;
+	    thread_pool_t *threads;  // the threads associated with this queue
+        sem_t *tasks_semaphore; // keeps track of the number of tasks ready to be executed
+        int is_waited_on; // used to check if queue_wait has been called for this queue.
+    };
 
 
     //////// PROTOTYPES FOR THREAD POOL AND DISPATCH QUEUE MANAGEMENT ///////
