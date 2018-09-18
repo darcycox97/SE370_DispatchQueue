@@ -6,14 +6,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-
 ///////////// HELPER PROTOTYPES /////////////////
 dispatch_queue_thread_t *create_new_thread(dispatch_queue_t*);
 void worker_thread_start(void *);
 void dispatcher_thread_start(void *);
 /////////////////////////////////////////////////
-
-
 
 //////// IMPLEMENTATIONS OF FUNCTIONS DEFINED IN THE HEADER/ SPECIFIED BY THE ASSIGNMENT STARTER CODE //////////
 
@@ -29,7 +26,6 @@ task_t *task_create(void (* work)(void *), void *param, char* name) {
     sem_init(task->task_semaphore, 0, 0); // is unlocked when task is completed
 
     return task;
-
 }
 
 void task_destroy(task_t *task) {
@@ -43,12 +39,17 @@ void task_destroy(task_t *task) {
 dispatch_queue_t *dispatch_queue_create(queue_type_t queue_type) {
     dispatch_queue_t *queue = (dispatch_queue_t *)malloc(sizeof(dispatch_queue_t));
 
+    queue->is_waited_on = 0;
     queue->queue_type = queue_type;
     queue->head = queue->tail = NULL;
     queue->tasks_semaphore = (sem_t *)malloc(sizeof(sem_t));
+    queue->completion_semaphore = (sem_t *) malloc(sizeof(sem_t));
+
 
     // init tasks_semaphore to 0 because can't dispatch until task is added
+    // same for completion_semaphore, which will unlock when the queue finishes
     sem_init(queue->tasks_semaphore, 0, 0);
+    sem_init(queue->completion_semaphore, 0, 0);
 
     // initialise thread pool for the queue, number of threads depends on type of queue
     thread_pool_t *thread_pool = (thread_pool_t *)malloc(sizeof(thread_pool_t));
@@ -88,10 +89,32 @@ void dispatch_for(dispatch_queue_t *queue, long n, void (*work)(long)) {
 }
 
 int dispatch_queue_wait(dispatch_queue_t *queue) {
-    sem_wait(// wait for some semaphore to be above zero);
+    queue->is_waited_on = 1; // tells the queue to not accept any more tasks.
+    
+    while(1) {
+        // wait until all tasks in the queue have finished executing
+        // this means the queue is empty and all threads are returned to the thread pool
+
+        // get number of tasks in queue
+        int num_tasks_left;
+        sem_getvalue(queue->tasks_semaphore, &num_tasks_left);
+
+        // get number of threads in pool and determine if pool is full
+        int num_threads_in_pool;
+        sem_getvalue(queue->threads->thread_pool_semaphore, &num_threads_in_pool);
+        int thread_pool_full;
+        if (queue->queue_type == SERIAL) {
+            thread_pool_full = num_threads_in_pool == 1;
+        } else {
+            thread_pool_full = num_threads_in_pool == get_nprocs_conf();
+        }
+
+        if (thread_pool_full && num_tasks_left == 0) {
+            break;
+        }
+    }
     return 0;
 }
-
 
 int dispatch_async(dispatch_queue_t *queue, task_t *task) {
     task->type = ASYNC;
@@ -112,6 +135,10 @@ int dispatch_sync(dispatch_queue_t *queue, task_t *task) {
 /////// DISPATCH QUEUE AND THREAD POOL MANAGEMENT FUNCTIONS ////////////
 
 void add_to_dispatch_queue(dispatch_queue_t *queue, task_t *task) {
+
+    if (queue->is_waited_on) {
+        return; // we ignore any subsequent attempts to dispatch tasks after a call to dispatch_queue_wait
+    }
 
     // add task to queue
     if (queue->head == NULL) {
@@ -137,6 +164,7 @@ task_t *remove_from_dispatch_queue(dispatch_queue_t *queue) {
 }
 
 void add_to_thread_pool(thread_pool_t *thread_pool, dispatch_queue_thread_t *thread) {
+
     if (thread_pool->head != NULL) {
         thread->next = thread_pool->head;
     } else {
@@ -180,13 +208,12 @@ void worker_thread_start(void * dispatch_queue_thread) {
         // wait until task is assigned to the dispatch_queue_thread
         sem_wait(queue_thread->thread_semaphore);
 
-        printf("Executing new task: %s\n", queue_thread->task->name);
-
         // call the work function with its parameters
         (queue_thread->task->work)(queue_thread->task->params);
 
-        printf("Finished task: %s, unlocking thread pool semaphore because thread is available again\n", queue_thread->task->name);
-
+        // update semaphore so dispatcher thread knows another thread is available in the thread pool and
+        // add this thread back into the thread pool
+        add_to_thread_pool(queue_thread->queue->threads, queue_thread);
         sem_post(queue_thread->queue->threads->thread_pool_semaphore);
 
         sem_post(queue_thread->task->task_semaphore); // unlock task's semaphore so we know it is finished

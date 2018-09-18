@@ -49,14 +49,14 @@
     } thread_pool_t;
 
     struct dispatch_queue_t {
-        queue_type_t queue_type;            // the type of queue - serial or concurrent
+        queue_type_t queue_type;  // the type of queue - serial or concurrent
         task_t *head;
         task_t *tail;
 	    thread_pool_t *threads;  // the threads associated with this queue
         sem_t *tasks_semaphore; // keeps track of the number of tasks ready to be executed
         int is_waited_on; // used to check if queue_wait has been called for this queue.
+        sem_t *completion_semaphore; // used so callers can wait for this queue to empty
     };
-
 
     //////// PROTOTYPES FOR THREAD POOL AND DISPATCH QUEUE MANAGEMENT ///////
 
