@@ -55,7 +55,9 @@
 	    thread_pool_t *threads;  // the threads associated with this queue
         sem_t *tasks_semaphore; // keeps track of the number of tasks ready to be executed
         int is_waited_on; // used to check if queue_wait has been called for this queue.
-        sem_t *completion_semaphore; // used so callers can wait for this queue to empty
+        // the next two members are used in conjuction to wait for all tasks in a queue to finish
+        sem_t *queue_empty_semaphore; // used so callers can wait for this queue to empty
+        sem_t *threads_free_semaphore; // callers can wait for threads to become free
     };
 
     //////// PROTOTYPES FOR THREAD POOL AND DISPATCH QUEUE MANAGEMENT ///////
