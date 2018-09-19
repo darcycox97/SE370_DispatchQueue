@@ -2,6 +2,6 @@
 #include <sys/sysinfo.h>
 
 int main() {
-  printf("Number of cores: %d\n", get_nprocs_conf());
+  printf("This machine has %d cores.\n", get_nprocs_conf());
   return 0;
 }
