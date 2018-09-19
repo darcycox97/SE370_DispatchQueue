@@ -58,6 +58,7 @@
         // the next two members are used in conjuction to wait for all tasks in a queue to finish
         sem_t *queue_empty_semaphore; // used so callers can wait for this queue to empty
         sem_t *threads_free_semaphore; // callers can wait for threads to become free
+        pthread_t *dispatcher_thread; // the thread that accesses the queue
     };
 
     //////// PROTOTYPES FOR THREAD POOL AND DISPATCH QUEUE MANAGEMENT ///////
